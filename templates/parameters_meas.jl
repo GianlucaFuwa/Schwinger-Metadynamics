@@ -30,8 +30,8 @@ system["veryverbose"] = false
 system["randomseeds"] = [Random.Xoshiro()]
 system["logdir"] = "./logs/N$(physical["N"])/beta$(physical["β"])"
 system["logfile"] = "Qlims$(meta["Qlims"])_Qthr$(meta["Qthr"])_dq$(meta["δq"])_w$(meta["w"]).txt"
-system["measure_dir"] = "./measurements/N$(physical["N"])/beta$(physical["β"])/Qlims$(meta["Qlims"])_Qthr$(meta["Qthr"])_dq$(meta["δq"])_build"
+system["measure_dir"] = "./measurements/N$(physical["N"])/beta$(physical["β"])/Qlims$(meta["Qlims"])_Qthr$(meta["Qthr"])_dq$(meta["δq"])_w$(meta["w"])"
 system["savebias_dir"] = "./metapotentials/N$(physical["N"])/beta$(physical["β"])"
-system["biasfile"] = "Qlims$(meta["Qlims"])_Qthr$(meta["Qthr"])_dq$(meta["δq"])_build"
+system["biasfile"] = "Qlims$(meta["Qlims"])_Qthr$(meta["Qthr"])_dq$(meta["δq"])_w$(meta["w"])"
 #system["usebiases"] = [
 #    "./metapotentials/N$(physical["N"])_beta$(physical["β"])_Qlims$(meta["Qlims"])_Qthr$(meta["Qthr"])_dq$(meta["δq"])_w0.0001_k1000_TEMPER1_HIGHSTAT.txt"]
