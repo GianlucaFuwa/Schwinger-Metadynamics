@@ -9,10 +9,15 @@ julia src/run.jl template/parameters_build.jl
 
 2. Use built Metapotential to measure observables in second run (use: parameters_build.jl to see structure) and do:
 ```
-julia -t 2 src/jl template/parameters_meas.jl
+julia src/jl template/parameters_meas.jl
 ```
 
 **! Make sure to use the same Physics and Metapotential parameters for build- and measurement-run !**
+
+You can use Multi-threading when when performing paralleled tempered runs by doing:
+```
+julia -t auto ...
+```
 
 Measurements are outputted as .txt files in the chosen directories; you can use them to make plots as you wish.
 
