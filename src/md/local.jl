@@ -4,7 +4,7 @@ module Local
 	#using Base.Threads:@threads,nthreads,threadid
 	
 	import ..System_parameters: Params
-	import ..Gaugefields: Gaugefield,recalc_Sg!,recalc_CV!,dqar,daction
+	import ..Gaugefields: Gaugefield,dqar,daction,swap!
 	import ..Metadynamics: Bias_potential,update_bias!,penalty_potential,index
 	import ..Verbose_print: Verbose_,println_verbose
 	
@@ -44,7 +44,7 @@ module Local
 	end
 
 	function sweep!(field::Gaugefield,rng::Xoshiro,ϵ::Float64)
-		NX,NT = size(field)
+		NX,NT,_ = size(field)
 		numaccepts = 0
 		for eo in [0,1]
 			for ix = (eo+1):2:NX
@@ -66,7 +66,7 @@ module Local
 	end
 
 	function sweep_meta!(field::Gaugefield,bias::Bias_potential,rng::Xoshiro,ϵ::Float64,static::Bool)
-		NX,NT = size(field)
+		NX,NT,_ = size(field)
 		numaccepts = 0
 		for eo in [0,1]
 			for ix = (eo+1):2:NX

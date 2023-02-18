@@ -3,7 +3,7 @@ module Observables
     import ..Gaugefields: Gaugefield,plaquette,staple,wilson_loop,wilson_loop_avg,poly_loop
 
     function MetaCharge(g::Gaugefield)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		q = 0.
 		for it=1:NT
 			for ix=1:NX
@@ -14,7 +14,7 @@ module Observables
 	end
 
     function TopCharge(g::Gaugefield)
-        NX,NT = size(g)
+        NX,NT,_ = size(g)
         q = 0.0 + 0.0im
         for it=1:NT
             for ix=1:NX
@@ -25,7 +25,7 @@ module Observables
     end
 
     function wilson_loop_all(g::Gaugefield,LT::Int64)
-        NX,_ = size(g)
+        NX,_,_ = size(g)
         wils = zeros(ComplexF64,NX)
         for LX=1:NX
             wils[LX] += wilson_loop_avg(g,LX,LT,tempgauge=true)
@@ -34,7 +34,7 @@ module Observables
     end
 
     function poly_loop_avg(g::Gaugefield)
-        NX,_ = size(g)
+        NX,_,_ = size(g)
         poly_re = 0.0
         poly_im = 0.0
         for ix=1:NX

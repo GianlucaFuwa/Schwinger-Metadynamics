@@ -6,10 +6,11 @@ module Mainrun
 
     import ..System_parameters: Params,Params_set,parameterloading
     import ..Verbose_print: Verbose_,println_verbose,print2file
-    import ..Gaugefields: Gaugefield,recalc_Sg!,recalc_CV!,swap!
+    import ..Gaugefields: Gaugefield,recalc_Sg!,recalc_CV!
     import ..Metadynamics: Bias_potential
     import ..Measurements: Measurement_set,measurements,calc_weights
-    import ..Local: tempering_swap!,sweep!,sweep_meta!
+    import ..Local: sweep!,sweep_meta!
+    import ..Tempering: tempering_swap!
 
     import ..System_parameters:physical,meta,sim,mc,meas,system
 
@@ -60,7 +61,7 @@ module Mainrun
         rng = params.randomseeds[1]
 
         if params.initial == "hot"
-            field.g = rand(size(field.g) .- 0.5)*2*2pi
+            field.U = rand(size(field.U) .- 0.5)*2*2pi
             recalc_Sg!(field)
             recalc_CV!(field)
         end 
@@ -102,7 +103,7 @@ module Mainrun
         rng = params.randomseeds[1]
 
         if params.initial == "hot"
-            field.g = rand(size(field.g) .- 0.5)*2*2pi
+            field.U = rand(size(field.U) .- 0.5)*2*2pi
             recalc_Sg!(field)
             recalc_CV!(field)
         end 
@@ -165,7 +166,7 @@ module Mainrun
 
         if params.initial == "hot"
             for i=1:Ninstances
-            fields[i].g = rand(size(fields[i]) .- 0.5)*2*2pi
+            fields[i].U = rand(size(fields[i].U) .- 0.5)*2*2pi
             recalc_Sg!(fields[i])
             recalc_CV!(fields[i])
             end
@@ -246,27 +247,5 @@ module Mainrun
         flush(verbose)
         return nothing
     end
-                
-    function tempering_swap!(field_main::Gaugefield,field_meta::Gaugefield,bias::Bias_potential,rng::Xoshiro,static::Bool)
-		main_ind = index(bias,field_main.CV)
-		meta_ind = index(bias,field_meta.CV)
-
-		ΔCV = field_meta.CV - field_main.CV
-		ΔSg = field_meta.Sg - field_main.Sg
-		ΔV = bias[meta_ind] - bias[main_ind]
-		ΔV_pen = penalty_potential(bias,field_meta.CV) - penalty_potential(bias,field_main.CV)
-		accept_swap = rand(rng) ≤ exp(ΔV+ΔV_pen)
-		if accept_swap
-			swap!(field_main,field_meta)
-			field_meta.CV -= ΔCV
-			field_main.CV += ΔCV
-			field_meta.Sg -= ΔSg
-			field_main.Sg += ΔSg
-			if ~static
-				update_bias!(bias,field_meta.CV)
-			end
-		end
-		return accept_swap
-	end 
 
 end

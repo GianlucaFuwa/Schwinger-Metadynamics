@@ -5,7 +5,7 @@ module System_parameters
 	
 	printlist_physical = ["N","β"]
 
-	printlist_meta = ["meta_enabled","Qmax","Qthr","δq","w","k","is_static"]
+	printlist_meta = ["meta_enabled","abs_for_CV","Qmax","Qthr","δq","w","k","is_static"]
 
 	printlist_sim = ["Ntherm","Nsweeps","initial","tempering_enabled","Ninstances","swap_every"]
 
@@ -37,6 +37,7 @@ module System_parameters
 	system = Dict()
 
     meta["meta_enabled"] = true
+    meta["is_static"] = [false]
 
     mc["update_method"] = "Local"
 
@@ -69,6 +70,7 @@ module System_parameters
 		β::Float64
 
         meta_enabled::Bool
+        abs_for_CV::Union{Nothing,Bool}
 		Qlims::Union{Nothing,NTuple{2,Float64}}
 		Qthr::Union{Nothing,NTuple{2,Float64}}
 		δq::Union{Nothing,Float64}
@@ -106,7 +108,8 @@ module System_parameters
             measure_dir = system["measure_dir"]
 
             meta_enabled = meta["meta_enabled"]
-            if meta_enabled
+            if meta_enabled == true
+                abs_for_CV = meta["abs_for_CV"]
                 Qlims = meta["Qlims"]
                 Qthr = meta["Qthr"]
                 @assert Qthr[1] > Qlims[1] && Qthr[2] < Qlims[2] "Qthr limits have to be inside Qlims interval"
@@ -119,7 +122,7 @@ module System_parameters
                 usebiases = []
                 weightfiles = []
                 tempering_enabled = sim["tempering_enabled"]
-                if tempering_enabled
+                if tempering_enabled == true
                     Ninstances = sim["Ninstances"]
                     for i=1:Ninstances-1
                         push!(biasfiles,pwd()*savebias_dir*"/"*system["biasfile"]*"_$i"*".txt")
@@ -144,6 +147,7 @@ module System_parameters
                 end
 
             else # IF NO META
+                abs_for_CV = nothing
                 Qlims = nothing
                 Qthr = nothing
                 δq = nothing
@@ -193,7 +197,7 @@ module System_parameters
             
 			return new(
 				N,β,
-                meta_enabled,Qlims,Qthr,δq,w,k,is_static,
+                meta_enabled,abs_for_CV,Qlims,Qthr,δq,w,k,is_static,
                 Ntherm,Nsweeps,initial,tempering_enabled,Ninstances,swap_every,
                 update_method,ϵ_metro,
                 meas_calls,
@@ -283,7 +287,7 @@ module System_parameters
                 if name != "methodname"
                     count += 1
                     paramstring = get_stringfromkey(key_i)
-                    string = "    \"$(name)\" => "*paramstring
+                    string = "    \"$(name)\" => "*paramstring*"\n"
                     if count != length(data) -1
                         string *= ","
                     end

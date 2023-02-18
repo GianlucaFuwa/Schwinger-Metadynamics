@@ -57,7 +57,7 @@ module Measurements
                     plaq_im /= field.NV
                     println(measfile,"$itr $plaq_re $plaq_im # plaq_re plaq_im")
                 elseif method["methodname"] == "Action"
-                    s = field.Sg
+                    s = field.Sg/field.NV
                     println(measfile,"$itr $s # action")
                 elseif method["methodname"] == "Continuous_charge" 
                     q = field.CV

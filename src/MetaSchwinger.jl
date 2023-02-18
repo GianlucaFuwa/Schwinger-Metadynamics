@@ -9,6 +9,7 @@ module MetaSchwinger
     include("md/local.jl")
     include("md/tempering.jl")
     include("system/mainrun.jl")
+    include("system/mainbuild.jl")
 
     import .System_parameters:Params,print_parameters,Params_set,make_parameters,parameterloading
     import .Gaugefields:Gaugefield,recalc_Sg!,dqar,daction,staple,plaquette,recalc_CV!
@@ -18,12 +19,13 @@ module MetaSchwinger
     import .Local:metropolis!,metropolis_meta!
     import .Tempering:tempering_swap!
     import .Mainrun:run_sim
+    import .Mainbuild:run_build
 
     export Gaugefield,recalc_Sg!,dqar,daction,staple,plaquette,swap!,recalc_CV!
     export Bias_potential,update_bias,penalty_potential
     export Measurement_set,measurements,build_measurements,calc_weights
     export metropolis!,metropolis_meta!,sweep!,sweep_meta!,tempering_swap!
     export Params,print_parameters,Params_set,make_parameters,show_parameters
-    export run_sim,run_sim!
+    export run_sim,run_build
 
 end

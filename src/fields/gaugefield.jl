@@ -32,11 +32,11 @@ module Gaugefields
 	end
 
 	function Base.size(g::Gaugefield)
-		return g.NX,g.NT
+		return g.NX,g.NT,2
 	end
 	
 	function recalc_Sg!(g::Gaugefield)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		s = 0.0
 		for it=1:NT
 			for ix=1:NX
@@ -48,8 +48,8 @@ module Gaugefields
 	end
 
 	function recalc_CV!(g::Gaugefield)
-		NX,NT = size(g)
-		q = 0.
+		NX,NT,_ = size(g)
+		q = 0.0
 		for it=1:NT
 			for ix=1:NX
 			q += sin(plaquette(g,ix,it))
@@ -60,12 +60,12 @@ module Gaugefields
 	end
 	
 	function plaquette(g::Gaugefield,ix,it)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		return g[ix,it,1]+g[mod1(ix+1,NX),it,2]-g[ix,mod1(it+1,NT),1]-g[ix,it,2]
 	end
 
 	function plaquette_sum(g::Gaugefield)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		plaq_real = 0.0
 		plaq_imag = 0.0
 		for it=1:NT
@@ -78,7 +78,7 @@ module Gaugefields
 	end
 	
 	function wilson_loop(g::Gaugefield,LX,LT,ix,it;tempgauge=false)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		x_up_side = 0.0
 		t_up_side = 0.0
 		x_down_side = 0.0
@@ -109,7 +109,7 @@ module Gaugefields
 	end
 
 	function poly_loop(g::Gaugefield,ix)
-		_,NT = size(g)
+		_,NT,_ = size(g)
 		poly = 0.0
 		for it=1:NT-1
 			poly += g[ix,it,2]
@@ -118,7 +118,7 @@ module Gaugefields
 	end 
 
 	function wilson_loop_avg(g::Gaugefield,LX,LT;tempgauge=false)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		wils = zeros(NX,NT)
 		x_up_side = zeros(NX,NT)
 		t_up_side = zeros(NX,NT)
@@ -148,16 +148,16 @@ module Gaugefields
 	end
 	
 	function staple(g::Gaugefield,ix::Int64,it::Int64,μ::Int64)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		it_min = mod1(it-1,NT)
 		it_plu = mod1(it+1,NT)
-		ix_min = mod1(it-1,NT)
-		ix_plu = mod1(it+1,NT)
+		ix_min = mod1(ix-1,NX)
+		ix_plu = mod1(ix+1,NX)
 		if μ == 1
 			l =  g[ix,it    ,2] + g[ix,it_plu,1] - g[ix_plu,it    ,2]
 			r = -g[ix,it_min,2] + g[ix,it_min,1] + g[ix_plu,it_min,2]
 		elseif μ == 2
-			l =  g[ix    ,it,1] + g[it_plu,it,2] - g[ix    ,it_plu,1]
+			l =  g[ix    ,it,1] + g[ix_plu,it,2] - g[ix    ,it_plu,1]
 			r = -g[ix_min,it,1] + g[ix_min,it,2] + g[ix_min,it_plu,1]
 		end
 		return exp(l*im)+exp(r*im)
@@ -170,11 +170,11 @@ module Gaugefields
 	end
 	
 	function dqar(g::Gaugefield,ix::Int64,it::Int64,μ::Int64,dU::Float64)
-		NX,NT = size(g)
+		NX,NT,_ = size(g)
 		it_min = mod1(it-1,NT)
 		it_plu = mod1(it+1,NT)
-		ix_min = mod1(it-1,NX)
-		ix_plu = mod1(it+1,NX) 
+		ix_min = mod1(ix-1,NX)
+		ix_plu = mod1(ix+1,NX) 
 		if μ == 1
 			a = g[ix,it    ,1]+dU + g[ix_plu,it    ,2] - g[ix,it_plu,1]    - g[ix,it    ,2]
 			b = g[ix,it_min,1]    + g[ix_plu,it_min,2] - g[ix,it    ,1]-dU - g[ix,it_min,2]
