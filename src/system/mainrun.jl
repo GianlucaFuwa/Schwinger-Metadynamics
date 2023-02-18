@@ -1,23 +1,22 @@
 module Mainrun
-    using Printf 
     using DelimitedFiles
     using InteractiveUtils
     using Dates
-    using Base.Threads:@spawn,nthreads
-    
-    import ..System_parameters:Params,Params_set,parameterloading
-    import ..Verbose_print:Verbose_,println_verbose
-    import ..Gaugefields:Gaugefield,recalc_S!,recalc_Q!,instanton,daction,plaquette
-    import ..Metadynamics:Bias_potential,update_bias!,penalty_potential
-    import ..Measurements:Measurement_set,measurements,calc_topcharge,calc_weights,build_measurements
-    import ..MC:metropolis!,metropolis_meta!,instanton_update!,try_swap!,sweep!,sweep_meta!
+    using Base.Threads
 
-    import ..System_parameters:physical,meta,sim,system
+    import ..System_parameters: Params,Params_set,parameterloading
+    import ..Verbose_print: Verbose_,println_verbose,print2file
+    import ..Gaugefields: Gaugefield,recalc_Sg!,recalc_CV!
+    import ..Metadynamics: Bias_potential
+    import ..Measurements: Measurement_set,measurements,calc_weights
+    import ..MC: tempering_swap!,sweep!,sweep_meta!
+
+    import ..System_parameters:physical,meta,sim,mc,meas,system
 
     function run_sim(filenamein::String)
         filename = filenamein
         include(abspath(filename))
-        params_set = Params_set(physical,meta,sim,system)
+        params_set = Params_set(physical,meta,sim,mc,meas,system)
 
         run_sim(params_set)
 
@@ -27,20 +26,69 @@ module Mainrun
     function run_sim(params_set::Params_set)
         params = parameterloading(params_set)
 
-        if params.parallel_tempering
-            @assert nthreads() ≥ 2 "Make sure to enable at least 2 threads when using parallel tempering! Do: 'julia -t 2' or 'julia -t auto'"
-            field_main = Gaugefield(params)
-            field_meta = Gaugefield(params)
-            bias = Bias_potential(params)
-            run_temperedsim!(field_main,field_meta,bias,params)
-        elseif ~params.parallel_tempering
+        if params.meta_enabled
+            if params.tempering_enabled
+                fields = Vector{Gaugefield}(undef,0)
+                biases = Vector{Bias_potential}(undef,0)
+                for i=1:params.Ninstances
+                push!(fields,Gaugefield(params))
+                end
+                for i=1:params.Ninstances-1
+                push!(biases,Bias_potential(params,instance=i))
+                end
+                run_temperedsim!(fields,biases,params)
+            elseif ~params.tempering_enabled
+                field = Gaugefield(params)
+                bias = Bias_potential(params)
+                run_sim!(field,bias,params)
+            end
+        else
             field = Gaugefield(params)
-            bias = Bias_potential(params)
-            run_sim!(field,bias,params)
+            run_sim!(field,params)
         end
-
         return nothing
     end
+
+    function run_sim!(field::Gaugefield,params::Params)
+        verbose = Verbose_(params.logfile)
+        println_verbose(verbose,"# ",pwd())
+        println_verbose(verbose,"# ",Dates.now())
+        versioninfo(verbose)
+
+        measset = Measurement_set(params.measure_dir,meas_calls = params.meas_calls)
+        ϵ = params.ϵ_metro
+        rng = params.randomseeds[1]
+
+        if params.initial == "hot"
+            field.g = rand(size(field.g) .- 0.5)*2*2pi
+            recalc_Sg!(field)
+            recalc_CV!(field)
+        end 
+
+        for therm = 1:params.Ntherm
+            sweep!(field,rng,ϵ)
+        end
+        
+        numaccepts = 0
+
+        for trj = 1:params.Nsweeps
+            tmp = sweep!(field,rng,ϵ)
+            numaccepts += tmp
+            # writing logs....#
+            if params.veryverbose
+            println_verbose(verbose," ",trj," ",100*numaccepts/trj/field.NV/2,"%"," # trj accrate")
+            end
+            #-----------------#
+            measurements(trj,field,measset)
+        end
+        println_verbose(verbose,"Acceptance rate: $(100*numaccepts/params.Nsweeps/field.NV/2)%")
+
+        flush(stdout)
+        flush(verbose)
+        return nothing
+    end
+
+    #=============================================================================================#
 
     function run_sim!(field::Gaugefield,bias::Bias_potential,params::Params)
         verbose = Verbose_(params.logfile)
@@ -49,165 +97,151 @@ module Mainrun
         versioninfo(verbose)
 
         measset = Measurement_set(params.measure_dir,meas_calls = params.meas_calls)
-        ϵ = params.ϵ
-        rng = params.randomseed
-        insta1 = instanton(field,1)
+        ϵ = params.ϵ_metro
+        is_static = bias.is_static
+        rng = params.randomseeds[1]
 
         if params.initial == "hot"
             field.g = rand(size(field.g) .- 0.5)*2*2pi
+            recalc_Sg!(field)
+            recalc_CV!(field)
         end 
 
-        if params.meta_runtype == "static"
-            static = true
-        elseif params.meta_runtype == "dynamic"
-            static = false
+        for therm = 1:params.Ntherm
+            sweep!(field,rng,ϵ)
         end
-
-        recalc_S!(field)
-        recalc_Q!(field)
-        for trj = 1:params.Ntherm
-            for nx = 1:field.Nx
-                for nt = 1:field.Nt
-                    for d = 1:2
-                        metropolis!(field,nx,nt,d,rng,ϵ)
-                    end
-                end
-            end
-        end
-        if params.weightmode == "from_mean"
-            bias_mean = deepcopy(bias.values)
-        end
+        
         numaccepts = 0
+        bias_mean = deepcopy(bias.values)
         for trj = 1:params.Nsweeps
-            for eo in [0,1]
-                for nx = (eo+1):2:field.Nx
-                    for nt = 1:field.Nt
-                        accept = metropolis_meta!(field,bias,nx,nt,2,rng,ϵ,static)
-                        numaccepts += ifelse(accept,1,0)
-                    end
-                end
+            tmp = sweep_meta!(field,bias,rng,ϵ,is_static)
+            numaccepts += tmp
+            # writing logs....#
+            if params.veryverbose
+            println_verbose(verbose," ",trj," ",100*numaccepts/trj/field.NV/2,"%"," # trj accrate")
             end
-            for eo in [0,1]
-                for nt = (eo+1):2:field.Nt
-                    for nx = 1:field.Nx
-                        accept = metropolis_meta!(field,bias,nx,nt,1,rng,ϵ,static)
-                        numaccepts += ifelse(accept,1,0)
-                    end
-                end
-            end
-            if trj%params.insta_every == 0
-                accept = instanton_update!(field,bias,a,rng,insta1)
-                numaccepts += ifelse(accept,1,0)
+            #-----------------#
+            if is_static == false
+                bias_mean += bias.values
+                #seekstart(bias)
+                #writedlm(bias.fp,[bias.q_vals bias_mean/trj])
+                #flush(bias)
             end
             measurements(trj,field,measset)
-            if params.weightmode == "from_mean"
-                bias_mean += bias.values
-            end
         end
-        if params.weightmode == "from_mean"
-            bias.values = bias_mean ./ params.Nsweeps
-            open(params.biasfile,"w") do io
-                writedlm(io,[bias.q_vals bias.values])
-            end
-        end
-        println_verbose(verbose,"Acceptance rate: $(100*numaccepts/params.Nsweeps/field.Nx/field.Nt/2)%")
+        println_verbose(verbose,"Acceptance rate: $(100*numaccepts/params.Nsweeps/field.NV/2)%")
 
-        open(params.biasfile,"w") do io
-            writedlm(io,[bias.q_vals bias.values])
-        end
-        println_verbose(verbose,"Metapotential has been saved in file \"$(params.biasfile)\"")
+        writedlm(bias.fp,[bias.q_vals bias_mean/params.Nsweeps])
+        flush(bias)
+
         q_vals = readdlm(pwd()*"/"*params.measure_dir*"/Continuous_charge.txt",Float64,comments=true)
         weights = calc_weights(q_vals[:,2],bias)
-        open(params.weightfile,"w") do io
+        open(params.weightfiles[1],"w") do io
             writedlm(io,weights)
         end
-        println_verbose(verbose,"Weights have been saved in file \"$(params.weightfile)\"")
+
         flush(stdout)
         flush(verbose)
         return nothing
     end
 
-    function run_temperedsim!(field_main::Gaugefield,field_meta::Gaugefield,bias::Bias_potential,params::Params)
+    #=============================================================================================#
+    
+    function run_temperedsim!(fields::Vector{Gaugefield},biases::Vector{Bias_potential},params::Params)
+        Ninstances = params.Ninstances
         verbose = Verbose_(params.logfile)
         println_verbose(verbose,"# ",pwd())
         println_verbose(verbose,"# ",Dates.now())
         versioninfo(verbose)
-        println_verbose(verbose,"### This is a parallel tempered run! ###")
+        println_verbose(verbose,"# Parallel tempered run with ",params.Ninstances," instances")
 
-        measset_main = Measurement_set(params.measure_dir,meas_calls = params.meas_calls)
-        measset_meta = Measurement_set(params.measure_dir_secondary,meas_calls = params.meas_calls)
+        meassets = Vector{Measurement_set}(undef,0)
+        for i=1:Ninstances
+            push!(meassets,Measurement_set(params.measure_dir,meas_calls=params.meas_calls,instance="_$i"))
+        end
 
-        ϵ = params.ϵ
-        rng = params.randomseed
+        ϵ = params.ϵ_metro
+        rng = params.randomseeds
 
         if params.initial == "hot"
-            field_main.g = rand(size(field_main.g) .- 0.5)*2*2pi
-            field_meta.g = rand(size(field_meta.g) .- 0.5)*2*2pi
+            for i=1:Ninstances
+            fields[i].g = rand(size(fields[i]) .- 0.5)*2*2pi
+            recalc_Sg!(fields[i])
+            recalc_CV!(fields[i])
+            end
         end 
 
-        if params.meta_runtype == "static"
-            static = true
-        elseif params.meta_runtype == "dynamic"
-            static = false
+        for therm = 1:params.Ntherm
+            @threads for i=1:Ninstances
+            sweep!(fields[i],rng[i],ϵ)
+            end
         end
 
-        recalc_S!(field_main)
-        recalc_Q!(field_main)
-        recalc_S!(field_meta)
-        recalc_Q!(field_meta)
-
-        for trj = 1:params.Ntherm
-            tmp = @spawn sweep!(field_main,rng,ϵ)
-            sweep!(field_meta,rng,ϵ)
-            fetch(tmp)
+        numaccepts = zeros(Int64,Ninstances)
+        num_swaps = zeros(Int64,Ninstances-1)
+        tmp = zeros(Int64,Ninstances)
+        bias_means = []
+        for i=1:Ninstances-1
+            push!(bias_means,deepcopy(biases[1].values))
         end
-
-        if params.weightmode == "from_mean"
-            bias_mean = deepcopy(bias.values)
-        end
-        numaccepts_main = 0
-        numaccepts_meta = 0
-        num_swaps = 0
 
         for trj = 1:params.Nsweeps
-            tmp1 = @spawn sweep!(field_main,rng,ϵ)
-            tmp2 = sweep_meta!(field_meta,bias,rng,ϵ,static)
-            numaccepts_main += fetch(tmp1)
-            numaccepts_meta += tmp2
+            tmp[1] = sweep!(fields[1],rng[1],ϵ)
+            numaccepts[1] += tmp[1]
+            @threads for i=2:Ninstances
+                tmp[i] = sweep_meta!(fields[i],biases[i-1],rng[i],ϵ,false)
+                numaccepts[i] += tmp[i]
+            end
+            # writing logs....#
+            if params.veryverbose == true
+                for i=1:Ninstances
+                    println_verbose(verbose,i," ",trj," ",100*numaccepts[i]/trj/fields[i].NV/2,"%"," # instance trj accrate")
+                    println_verbose(verbose,"------------------------------------------------------")
+                end
+            end
+            #-----------------#
+
+            for i=1:Ninstances-1
+                if biases[i].is_static == false
+                    bias_means[i] += biases[i].values
+                end
+                #seekstart(biases[i].fp)
+                #writedlm(biases[i].fp,[biases[i].q_vals bias_means[i]/trj])
+                #flush(biases[i].fp)
+            end
 
             if trj%params.swap_every == 0
-                accept_swap = try_swap!(field_main,field_meta,bias,rng,static,verbose)
-                num_swaps += ifelse(accept_swap,1,0)
+                for i=Ninstances-1:-1:1
+                accept_swap = tempering_swap!(fields[i],fields[i+1],biases[i],rng[1],false)
+                num_swaps[i] += ifelse(accept_swap,1,0)
+                if params.veryverbose == true
+                    print2file(verbose,i," ⇔ ",i+1," ",100*num_swaps[i]/(trj÷params.swap_every),"%"," # trj swapaccrate")
+                    print2file(verbose,"------------------------------------------------------")
+                end
+                end
             end
-            @sync begin
-            @spawn measurements(trj,field_main,measset_main)
-            measurements(trj,field_meta,measset_meta)
+            @threads for i=1:Ninstances
+            measurements(trj,fields[i],meassets[i])
             end
-            if params.weightmode == "from_mean"
-                bias_mean += bias.values
-            end
+        end # END SWEEPS
+
+        for i=1:Ninstances
+        println_verbose(verbose,"Acceptance rate ",i,": ",100*numaccepts[i]/params.Nsweeps/fields[1].NV/2,"%")
+        if i<Ninstances
+            println_verbose(verbose,"Swap Acceptance rate ",i," ⇔ ",i+1,": ",100*num_swaps[i]/(params.Nsweeps÷params.swap_every),"%")
+        end
         end
 
-        if params.weightmode == "from_mean"
-            bias.values = bias_mean ./ params.Nsweeps
-            open(params.biasfile,"w") do io
-                writedlm(io,[bias.q_vals bias.values])
+        for i=1:Ninstances-1
+            q_vals = readdlm(pwd()*"/"*params.measure_dir*"/Continuous_charge_$i.txt",Float64,comments=true)
+            weights = calc_weights(q_vals[:,2],biases[i])
+            open(params.weightfiles[i],"w") do io
+                writedlm(io,weights)
             end
+            writedlm(biases.fp[i],[biases[i].q_vals bias_means[i]/params.Nsweeps])
+            flush(biases[i])
         end
-        println_verbose(verbose,"Main Acceptance rate: $(100*numaccepts_main/params.Nsweeps/field_main.Nx/field_main.Nt/2)%")
-        println_verbose(verbose,"Meta Acceptance rate: $(100*numaccepts_meta/params.Nsweeps/field_meta.Nx/field_meta.Nt/2)%")
-        println_verbose(verbose,"Swap Acceptance rate: $(100*num_swaps/(params.Nsweeps÷params.swap_every))%")
 
-        open(params.biasfile,"w") do io
-            writedlm(io,[bias.q_vals bias.values])
-        end
-        println_verbose(verbose,"Metapotential has been saved in file \"$(params.biasfile)\"")
-        q_vals = readdlm(pwd()*"/"*params.measure_dir_secondary*"/Continuous_charge.txt",Float64,comments=true)
-        weights = calc_weights(q_vals[:,2],bias)
-        open(params.weightfile,"w") do io
-            writedlm(io,weights)
-        end
-        println_verbose(verbose,"Weights have been saved in file \"$(params.weightfile)\"")
         flush(stdout)
         flush(verbose)
         return nothing

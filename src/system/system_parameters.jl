@@ -1,20 +1,24 @@
 module System_parameters
 	using Random
     using DelimitedFiles
-	export Params
+    export Params
 	
 	printlist_physical = ["N","β"]
 
-	printlist_meta = ["Qmax","Qthr","δq","w","k"]
+	printlist_meta = ["meta_enabled","Qmax","Qthr","δq","w","k","is_static"]
 
-	printlist_sim = ["ϵ","Ntherm","Nsweeps","insta_every","meta_runtype","weightmode","initial","parallel_tempering","swap_every"]
+	printlist_sim = ["Ntherm","Nsweeps","initial","tempering_enabled","Ninstances","swap_every"]
 
-    printlist_system = ["randomseed","meas_calls","logdir","logfile","loadfile",
-    "measure_dir","savebias_dir","biasfile","usebias","weightfile"]
+    printlist_mc = ["update_method","ϵ_metro","ϵ_hmc","hmc_steps"]
 
-    const printlists = [printlist_physical,printlist_meta,printlist_sim,printlist_system]
-    const printlists_header = ["# Physical Settings ","# Metadynamics Settings",
-    "# Simulation Settings","# System Settings"]
+    printlist_meas = ["meas_calls"]
+
+    printlist_system = ["veryverbose","randomseeds","logdir","logfile","loadfile",
+    "measure_dir","savebias_dir","biasfile","usebiases","weightfile"]
+
+    const printlists = [printlist_physical,printlist_meta,printlist_sim,printlist_mc,printlist_meas,printlist_system]
+    const printlists_header = ["# Physical Settings ","# Metadynamics Settings","# Simulation Settings",
+    "# MC Settings","# Measurement Settings","# System Settings"]
 
 	defaultmeasures = Array{Dict,1}(undef,2)
 	for i=1:length(defaultmeasures)
@@ -28,139 +32,176 @@ module System_parameters
 	physical = Dict()
 	meta = Dict()
 	sim = Dict()
+    mc = Dict()
+    meas = Dict()
 	system = Dict()
 
-    sim["insta_every"] = typemax(Int)
-    sim["meta_runtype"] = "dynamic"
-    sim["weightmode"] = "from_mean"
-    sim["parallel_tempering"] = false
-    sim["swap_every"] = 10
+    meta["meta_enabled"] = true
 
-    system["randomseed"] = Random.Xoshiro(
-        0x0c59f9d0d6a1e02b,
-        0x9929c1fbac5d828f,
-        0xf384432ed102e01f,
-        0xd80d9f6f25af5c20)
-	system["meas_calls"] = defaultmeasures
+    mc["update_method"] = "Local"
+
+    sim["tempering_enabled"] = false
+
+	meas["meas_calls"] = defaultmeasures
+
+    system["veryverbose"] = false
+    system["randomseeds"] = [Random.Xoshiro(1206)]
 	
 	mutable struct Params_set
 	physical::Dict
 	meta::Dict
 	sim::Dict
+    mc::Dict
+    meas::Dict
 	system::Dict
 	
-        function Params_set(physical,meta,sim,system)
-            return new(physical,meta,sim,system)
+        function Params_set(physical,meta,sim,mc,meas,system)
+            return new(physical,meta,sim,mc,meas,system)
         end
     end
 	
-    function make_parameters(physical,meta,sim,system)
-        return Params_set(physical,meta,sim,system)
+    function make_parameters(physical,meta,sim,mc,meas,system)
+        return Params_set(physical,meta,sim,mc,meas,system)
     end
     
 	struct Params
 		N::Tuple
 		β::Float64
 
-		Qmax::NTuple{2,Float64}
-		Qthr::NTuple{2,Float64}
-		δq::Float64
-		w::Float64
-		k::Float64
+        meta_enabled::Bool
+		Qlims::Union{Nothing,NTuple{2,Float64}}
+		Qthr::Union{Nothing,NTuple{2,Float64}}
+		δq::Union{Nothing,Float64}
+		w::Union{Nothing,Float64}
+		k::Union{Nothing,Float64}
+        is_static::Union{Nothing,Vector{Bool}}
 
-		ϵ::Float64
 		Ntherm::Int64
 		Nsweeps::Int64
-		insta_every::Int64
-		meta_runtype::String
-        weightmode::String
 		initial::String
-        parallel_tempering::Bool
-        swap_every::Int64
+        tempering_enabled::Union{Nothing,Bool}
+        Ninstances::Union{Nothing,Int64}
+        swap_every::Union{Nothing,Int64}
 
-		randomseed::Xoshiro
-		meas_calls::Array{Dict,1}
+        update_method::String
+		ϵ_metro::Union{Float64,Nothing}
+
+        meas_calls::Array{Dict,1}
+
+        veryverbose::Bool
+		randomseeds::Vector{Xoshiro}
 		logdir::String
 		logfile::String
 		loadfile::IOStream
 		measure_dir::String
-        measure_dir_secondary::String
-		savebias_dir::String
-		biasfile::String
-		usebias::Array{Float64,1}
-        weightfile::String
+		savebias_dir::Union{Nothing,String}
+		biasfiles::Union{Nothing,Vector{String}}
+		usebiases::Union{Nothing,Vector{Union{Nothing,String}}}
+        weightfiles::Union{Nothing,Vector{String}}
 
-		function Params(physical,meta,sim,system)
+		function Params(physical,meta,sim,mc,meas,system)
 			N = physical["N"]
 			β = physical["β"]
 
-			Qmax = meta["Qmax"]
-			Qthr = meta["Qthr"]
-			δq = meta["δq"]
-			w = meta["w"]
-			k = meta["k"]
-			
-			ϵ = sim["ϵ"]
-			Ntherm = sim["Ntherm"]
-			Nsweeps = sim["Nsweeps"]
-			insta_every = sim["insta_every"]
-            if sim["meta_runtype"] == "static" || sim["meta_runtype"] == "dynamic"
-			    meta_runtype = sim["meta_runtype"]
-            else 
-                error("meta_runtype can only be either \"static\" or \"dynamic\".")
-            end
-            if sim["weightmode"] == "from_mean" || sim["weightmode"] == "from_current"
-                weightmode = sim["weightmode"]
-            else 
-                error("weightmode can only be either \"from_mean\" or \"from_current\".")
-            end
-			initial = sim["initial"]
-            parallel_tempering = sim["parallel_tempering"]
-            swap_every = sim["swap_every"]
+            measure_dir = system["measure_dir"]
 
-			randomseed = system["randomseed"]
-			meas_calls = system["meas_calls"]
+            meta_enabled = meta["meta_enabled"]
+            if meta_enabled
+                Qlims = meta["Qlims"]
+                Qthr = meta["Qthr"]
+                @assert Qthr[1] > Qlims[1] && Qthr[2] < Qlims[2] "Qthr limits have to be inside Qlims interval"
+                δq = meta["δq"]
+                w = meta["w"]
+                k = meta["k"]
+                is_static = meta["is_static"]
+                savebias_dir = system["savebias_dir"]
+                biasfiles = []
+                usebiases = []
+                weightfiles = []
+                tempering_enabled = sim["tempering_enabled"]
+                if tempering_enabled
+                    Ninstances = sim["Ninstances"]
+                    for i=1:Ninstances-1
+                        push!(biasfiles,pwd()*savebias_dir*"/"*system["biasfile"]*"_$i"*".txt")
+                        push!(weightfiles,pwd()*"/"*measure_dir*"/Weights_$i.txt")
+                        if haskey(system,"usebiases")
+                            usebiases = system["usebiases"]
+                        else   
+                            push!(usebiases,nothing)
+                        end
+                    end
+                else # IF NO TEMPERING
+                    push!(biasfiles,pwd()*savebias_dir*"/"*system["biasfile"]*".txt")
+                    push!(weightfiles,pwd()*"/"*measure_dir*"/Weights.txt")
+                end # END IF TEMPERING
+                if isdir(savebias_dir) == false
+                    mkpath(savebias_dir)
+                end
+                if haskey(system,"usebiases")
+                    push!(usebiases,system["usebiases"][1])
+                else   
+                    push!(usebiases,nothing)
+                end
+
+            else # IF NO META
+                Qlims = nothing
+                Qthr = nothing
+                δq = nothing
+                w = nothing
+                k = nothing
+                is_static = nothing
+                savebias_dir = nothing
+                biasfiles = nothing
+                usebiases = nothing
+                weightfiles = nothing
+                tempering_enabled = nothing
+            end # END IF META
+			
+            Ntherm = sim["Ntherm"]
+			Nsweeps = sim["Nsweeps"]
+            initial = sim["initial"]
+
+            update_method = mc["update_method"]
+            if update_method == "Local" || update_method == "Local-Meta"
+			    ϵ_metro = mc["ϵ_metro"]
+            else
+                error("Only local update method supported")
+            end
+
+            meas_calls = meas["meas_calls"]
+
+            if tempering_enabled == true
+                Ninstances = sim["Ninstances"]
+                swap_every = sim["swap_every"]
+            else
+                Ninstances = nothing
+                swap_every = nothing
+            end
+
+            veryverbose = system["veryverbose"]
+			randomseeds = system["randomseeds"]
 			logdir = system["logdir"]
 			if isdir(logdir) == false
-				mkdir(logdir)
+				mkpath(logdir)
 			end
 			logfile = pwd()*"/"*logdir*"/"*system["logfile"]
 			loadfile = open(logfile,"a")
-			measure_dir = system["measure_dir"]
-            if parallel_tempering
-                measure_dir_secondary = system["measure_dir"]*"_secondary"
-                weightfile = pwd()*"/"*measure_dir_secondary*"/Weights.txt"
-            else 
-                measure_dir_secondary = ""
-                weightfile = pwd()*"/"*measure_dir*"/Weights.txt"
+
+            if isdir(measure_dir) == false
+                mkpath(measure_dir)
             end
-			if isdir(measure_dir) == false
-				mkpath(measure_dir)
-            end
-            if isdir(measure_dir_secondary) == false && measure_dir_secondary !== ""
-                mkpath(measure_dir_secondary)
-			end
-			savebias_dir = system["savebias_dir"]
-			if isdir(savebias_dir) == false
-				mkpath(savebias_dir)
-			end
-			biasfile = pwd()*"/"*savebias_dir*"/"*system["biasfile"]
-			if haskey(system,"usebias")
-                file = system["usebias"]
-				usebias = readdlm(file,Float64)
-                @assert length(usebias[:,2]) == round(Int,((Qmax[2]-Qmax[1])/δq),RoundNearestTiesAway)+1 "Length of given Metapotential doesn't match Meta-parameters"
-                usebias = usebias[:,2]
-			else 
-				usebias = zeros(round(Int,(Qmax[2]-Qmax[1])/δq,RoundNearestTiesAway)+1)
-			end
+            
 			return new(
-				N,β,Qmax,Qthr,δq,w,k,ϵ,Ntherm,Nsweeps,insta_every,meta_runtype,
-                weightmode,initial,parallel_tempering,swap_every,randomseed,meas_calls,logdir,
-				logfile,loadfile,measure_dir,measure_dir_secondary,savebias_dir,biasfile,usebias,weightfile)
+				N,β,
+                meta_enabled,Qlims,Qthr,δq,w,k,is_static,
+                Ntherm,Nsweeps,initial,tempering_enabled,Ninstances,swap_every,
+                update_method,ϵ_metro,
+                meas_calls,
+                veryverbose,randomseeds,logdir,logfile,loadfile,measure_dir,savebias_dir,biasfiles,usebiases,weightfiles)
 		end
 
 		function Params(params_set::Params_set)
-			return Params(params_set.physical,params_set.meta,params_set.sim,params_set.system)
+			return Params(params_set.physical,params_set.meta,params_set.sim,params_set.mc,params_set.meas,params_set.system)
 		end
 	end
     
@@ -220,8 +261,12 @@ module System_parameters
             return "physical",params_set.physical[inputname]
         elseif haskey(params_set.meta,inputname)
             return "meta",params_set.meta[inputname]
+        elseif haskey(params_set.mc,inputname)
+            return "mc",params_set.mc[inputname]
         elseif haskey(params_set.sim,inputname)
             return "sim",params_set.sim[inputname]
+        elseif haskey(params_set.meas,inputname)
+            return "meas",params_set.meas[inputname]
         else
             return nothing,nothing
         end
@@ -339,8 +384,8 @@ module System_parameters
         return nothing
     end
 
-    function parameterloading(physical,meta,sim,system)
-        param_set = Params_set(physical,meta,sim,system)
+    function parameterloading(physical,meta,sim,mc,meas,system)
+        param_set = Params_set(physical,meta,sim,mc,meas,system)
         p = Params(param_set)
 
         print_parameters(param_set,p)
