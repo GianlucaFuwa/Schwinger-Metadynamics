@@ -9,7 +9,7 @@ module Mainrun
     import ..Gaugefields: Gaugefield,recalc_Sg!,recalc_CV!,swap!
     import ..Metadynamics: Bias_potential
     import ..Measurements: Measurement_set,measurements,calc_weights
-    import ..MC: tempering_swap!,sweep!,sweep_meta!
+    import ..Local: tempering_swap!,sweep!,sweep_meta!
 
     import ..System_parameters:physical,meta,sim,mc,meas,system
 
