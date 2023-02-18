@@ -62,13 +62,14 @@ module Metadynamics
 		return b.values[min(length(b.values),max(i,1))]
 	end
 
-	function index(b::Bias_potential,q::Float64)
+	@inline function index(b::Bias_potential,q::Float64)
+		q = b.abs_for_CV ? abs(q) : q
 		grid_index = (q-b.Qlims[1])/b.δq + 0.5
 		return round(Int,grid_index,RoundNearestTiesAway)
 	end
 
 	function update_bias!(b::Bias_potential,q::Float64)
-		#q = b.abs_for_CV ? abs(q) : q
+		q = b.abs_for_CV ? abs(q) : q
 		grid_index = index(b,q)
 		grid_q = b.Qlims[1] + grid_index*b.δq
 
@@ -78,7 +79,7 @@ module Metadynamics
 	end
 
 	function penalty_potential(b::Bias_potential,q::Float64)
-		#q = b.abs_for_CV ? abs(q) : q
+		q = b.abs_for_CV ? abs(q) : q
 		if q < b.Qthr[1] || q > b.Qthr[2]
 			p_pot = b.k*min((q-b.Qthr[1])^2,(q-b.Qthr[2])^2)
 		else 
