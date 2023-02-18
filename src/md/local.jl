@@ -4,7 +4,7 @@ module Local
 	#using Base.Threads:@threads,nthreads,threadid
 	
 	import ..System_parameters: Params
-	import ..Gaugefields: Gaugefield,recalc_Sg!,recalc_CV!,dqar,daction,swap!
+	import ..Gaugefields: Gaugefield,recalc_Sg!,recalc_CV!,dqar,daction
 	import ..Metadynamics: Bias_potential,update_bias!,penalty_potential,index
 	import ..Verbose_print: Verbose_,println_verbose
 	
