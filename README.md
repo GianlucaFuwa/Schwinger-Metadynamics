@@ -14,7 +14,7 @@ julia src/jl template/parameters_meas.jl
 
 **! Make sure to use the same Physics and Metapotential parameters for build- and measurement-run !**
 
-You can use Multi-threading when when performing paralleled tempered runs by doing:
+You can use Multi-threading when performing paralleled tempered runs by doing:
 ```
 julia -t auto ...
 ```
