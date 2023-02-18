@@ -88,7 +88,7 @@ module Gaugefields
 				x_up_side += g[mod1(ix+i,NX),it,1] 
 				x_down_side -= g[mod1(ix+i,NX),mod1(it+LT,NT),1]
 			end
-			return exp(x_up_side + x_down_side)
+			return x_up_side + x_down_side
 		elseif tempgauge == false
 			for i=0:LX-1
 				x_up_side += g[mod1(ix+i,NX),it,1] 
