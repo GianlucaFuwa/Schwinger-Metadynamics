@@ -6,7 +6,7 @@ module MetaSchwinger
     include("metadynamics/metadynamics.jl")
     include("measurements/observables.jl")
     include("measurements/measurements.jl")
-    include("md/mc.jl")
+    include("md/local.jl")
     include("md/tempering.jl")
     include("system/mainrun.jl")
 
@@ -15,7 +15,7 @@ module MetaSchwinger
     import .Observables:MetaCharge,TopCharge,wilson_loop_all,poly_loop_avg
     import .Measurements:Measurement_set,measurements,build_measurements,calc_weights
     import .Metadynamics:Bias_potential,update_bias!,penalty_potential
-    import .MC:metropolis!,metropolis_meta!
+    import .Local:metropolis!,metropolis_meta!
     import .Tempering:tempering_swap!
     import .Mainrun:run_sim
 
