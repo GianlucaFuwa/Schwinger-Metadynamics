@@ -4,12 +4,12 @@ Variations of Metadynamics in Simulations of the Schwinger Model (1+1D QED)
 ## Quick Start
 1. Choose parameters of your choice to build a Metapotential first (use: parameters_build.jl to see structure) and do:
 ```
-julia src/run.jl template/parameters_build.jl
+julia src/build.jl template/parameters_build.jl
 ```
 
 2. Use built Metapotential to measure observables in second run (use: parameters_build.jl to see structure) and do:
 ```
-julia src/jl template/parameters_meas.jl
+julia src/run.jl template/parameters_meas.jl
 ```
 
 **! Make sure to use the same Physics and Metapotential parameters for build- and measurement-run !**
