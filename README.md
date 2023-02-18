@@ -11,7 +11,6 @@ julia src/run.jl template/parameters_build.jl
 ```
 julia -t 2 src/jl template/parameters_meas.jl
 ```
-**! Make sure to use 2 or more CPU-Threads when using Parallel Tempering!** 
 
 **! Make sure to use the same Physics and Metapotential parameters for build- and measurement-run !**
 
