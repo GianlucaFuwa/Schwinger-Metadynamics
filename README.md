@@ -17,4 +17,4 @@ julia -t 2 src/jl template/parameters_meas.jl
 
 Measurements are outputted as .txt files in the chosen directories; you can use them to make plots as you wish.
 
-This code is partly based on an old version of the [LatticeQCD.jl](https://github.com/akio-tomiya/LatticeQCD.jl) package by Akio Tomiya et al.
+This code is partly inspired by an old version of the [LatticeQCD.jl](https://github.com/akio-tomiya/LatticeQCD.jl) package by Akio Tomiya et al.
